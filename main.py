@@ -3,9 +3,11 @@ import selectorlib
 import os
 import smtplib, ssl
 import time
+import sqlite3
 
 URL = "http://programmer100.pythonanywhere.com/tours/"
 
+connection = sqlite3.connect("data.db")
 
 def scrape(url):
     """
@@ -23,8 +25,11 @@ def extract(source):
 
 
 def store(extracted):
-    with open("data.txt", "a") as file:
-        file.write(extracted + "\n")
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    cursor = connection.cursor()
+    cursor.execute("INSERT INTO events VALUES(?,?,?)", row)
+    connection.commit()
 
 
 def send_email(message):
@@ -42,10 +47,14 @@ def send_email(message):
     print("Email was sent!")
 
 
-def read():
-    with open("data.txt", "r") as file:
-        return file.read()
-
+def read(extracted):
+    row = extracted.split(",")
+    row = [item.strip() for item in row]
+    band, city, date = row
+    cursor = connection.cursor()
+    cursor.execute("SELECT * FROM events WHERE band=? AND city=? AND date=?", (band, city, date))
+    rows = cursor.fetchall()
+    return rows
 
 if __name__ == "__main__":
     while True:
@@ -53,12 +62,16 @@ if __name__ == "__main__":
             scraped = scrape(URL)
             extracted = extract(scraped)
             print(extracted)
-            content = read()
             if extracted.lower() != "no upcoming tours":
-                if extracted not in content:
+                row = read(extracted)
+                if not row:
                     store(extracted)
                     message = f"Hey, check out this new event {extracted}"
                     send_email(message)
+            cursor = connection.cursor()
+            cursor.execute("SELECT * FROM events")
+            db = cursor.fetchall()
+            print(db)
             time.sleep(2)
         except KeyboardInterrupt:
             break
